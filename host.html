@@ -363,7 +363,19 @@
       line-height: 1;
       margin-bottom: 6px;
     }
-    .player-card .p-dots { font-size: 18px; margin-bottom: 10px; letter-spacing: 2px; }
+    .player-card .p-bar-wrap {
+      background: rgba(255,255,255,.1);
+      border-radius: 99px;
+      height: 7px;
+      margin-bottom: 6px;
+      overflow: hidden;
+    }
+    .player-card .p-bar {
+      height: 100%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, #667eea, #4ade80);
+      transition: width .4s ease;
+    }
     .player-card .p-win  { font-size: 11px; color: rgba(255,255,255,.4); margin-bottom: 10px; }
     .player-card .guess-btn {
       width: 100%;
@@ -742,14 +754,14 @@
     grid.innerHTML = '';
     Object.entries(playersData).forEach(([name, info]) => {
       const score = info.score || 0;
-      const dots  = '●'.repeat(score) + '○'.repeat(Math.max(0, winScore - score));
+      const pct   = Math.min(100, (score / winScore) * 100);
       const div   = document.createElement('div');
       div.className = 'player-card' + (score >= winScore ? ' winner-card' : '');
       div.innerHTML = `
         <div class="p-name">${name}</div>
         <div class="p-score">${score}</div>
-        <div class="p-dots">${dots}</div>
-        <div class="p-win">目標 ${winScore} 張</div>
+        <div class="p-bar-wrap"><div class="p-bar" style="width:${pct}%"></div></div>
+        <div class="p-win">${score} / ${winScore} 張</div>
         <button class="guess-btn" data-player="${name}">✓ 猜對了！</button>`;
       div.querySelector('.guess-btn').addEventListener('click', () => awardPoint(name));
       grid.appendChild(div);
