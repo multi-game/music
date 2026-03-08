@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>猜歌遊戲 · 分數板</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      color: #fff;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 16px;
+    }
+
+    .screen { display: none; width: 100%; max-width: 480px; }
+    .screen.active { display: block; }
+
+    /* ── 加入畫面 ── */
+    .join-card {
+      margin-top: 60px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 20px;
+      padding: 32px 28px;
+      text-align: center;
+      backdrop-filter: blur(12px);
+    }
+    .join-card .logo { font-size: 52px; margin-bottom: 12px; }
+    .join-card h1   { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    .join-card p    { font-size: 14px; color: rgba(255,255,255,.5); margin-bottom: 28px; }
+
+    .code-input-wrap {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .code-input {
+      flex: 1;
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 5px;
+      text-align: center;
+      padding: 12px;
+      outline: none;
+      text-transform: uppercase;
+      transition: border-color .2s;
+    }
+    .code-input:focus { border-color: #667eea; }
+
+    .join-btn {
+      flex-shrink: 0;
+      padding: 12px 20px;
+      background: #667eea;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .15s;
+    }
+    .join-btn:active { transform: scale(.95); }
+
+    .error-msg {
+      color: #f87171;
+      font-size: 13px;
+      min-height: 18px;
+      text-align: center;
+    }
+
+    /* ── 遊戲畫面 ── */
+    .game-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 480px;
+      margin-bottom: 16px;
+    }
+    .game-header .room-code {
+      font-size: 13px;
+      color: rgba(255,255,255,.4);
+    }
+    .game-header .room-code span {
+      color: #667eea;
+      font-weight: 700;
+      letter-spacing: 2px;
+    }
+    .leave-btn {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.15);
+      color: rgba(255,255,255,.6);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    /* Now Playing */
+    .now-playing {
+      width: 100%;
+      max-width: 480px;
+      background: rgba(74,222,128,.1);
+      border: 1px solid rgba(74,222,128,.3);
+      border-radius: 14px;
+      padding: 14px 18px;
+      margin-bottom: 14px;
+      display: none;
+    }
+    .now-playing.show { display: flex; align-items: center; gap: 14px; }
+    .np-icon  { font-size: 28px; flex-shrink: 0; animation: pulse 1.5s infinite; }
+    .np-label { font-size: 11px; color: #4ade80; letter-spacing: 1px; margin-bottom: 3px; }
+    .np-title { font-size: 16px; font-weight: 700; }
+    .np-artist { font-size: 12px; color: rgba(255,255,255,.6); }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50%       { transform: scale(1.15); }
+    }
+
+    /* 分數卡片 */
+    .scores-grid {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .score-card {
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: 16px;
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      transition: border-color .3s, background .3s;
+    }
+    .score-card.leading {
+      border-color: rgba(251,191,36,.5);
+      background: rgba(251,191,36,.07);
+    }
+    .score-card .rank {
+      font-size: 22px;
+      width: 32px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .score-card .info { flex: 1; }
+    .score-card .p-name { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+    .score-card .progress-bar-wrap {
+      height: 6px;
+      background: rgba(255,255,255,.1);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .score-card .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      border-radius: 3px;
+      transition: width .5s ease;
+    }
+    .score-card.leading .progress-bar {
+      background: linear-gradient(90deg, #fbbf24, #f59e0b);
+    }
+    .score-card .score-text {
+      font-size: 28px;
+      font-weight: 900;
+      color: #667eea;
+      flex-shrink: 0;
+    }
+    .score-card.leading .score-text { color: #fbbf24; }
+
+    .waiting-msg {
+      text-align: center;
+      color: rgba(255,255,255,.4);
+      font-size: 14px;
+      padding: 40px 0;
+    }
+    .waiting-msg .spinner {
+      font-size: 32px;
+      margin-bottom: 12px;
+      animation: spin 2s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 勝利 Overlay */
+    .overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.8);
+      backdrop-filter: blur(10px);
+      z-index: 100;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 32px;
+    }
+    .overlay.show { display: flex; }
+    .win-emoji  { font-size: 72px; margin-bottom: 16px; animation: bounce 1s infinite; }
+    .win-title  { font-size: 16px; color: rgba(255,255,255,.6); margin-bottom: 8px; }
+    .win-name   { font-size: 44px; font-weight: 900; color: #fbbf24; margin-bottom: 12px; }
+    .win-sub    { font-size: 15px; color: rgba(255,255,255,.5); }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-14px); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── 加入畫面 ── -->
+<div id="screen-join" class="screen active">
+  <div class="join-card">
+    <div class="logo">🎵</div>
+    <h1>猜歌遊戲</h1>
+    <p>輸入主持人的房間代碼加入</p>
+    <div class="code-input-wrap">
+      <input class="code-input" id="room-code-input" maxlength="4"
+             placeholder="ABCD" oninput="this.value=this.value.toUpperCase()"
+             onkeydown="if(event.key==='Enter')joinRoom()" />
+      <button class="join-btn" onclick="joinRoom()">加入</button>
+    </div>
+    <div class="error-msg" id="error-msg"></div>
+  </div>
+</div>
+
+<!-- ── 遊戲畫面 ── -->
+<div id="screen-game" class="screen">
+  <div class="game-header">
+    <div class="room-code">房間 <span id="display-code">----</span></div>
+    <button class="leave-btn" onclick="leaveRoom()">離開</button>
+  </div>
+
+  <div class="now-playing" id="now-playing">
+    <div class="np-icon">🎵</div>
+    <div>
+      <div class="np-label">NOW PLAYING</div>
+      <div class="np-title"  id="np-title">—</div>
+      <div class="np-artist" id="np-artist">—</div>
+    </div>
+  </div>
+
+  <div class="scores-grid" id="scores-grid">
+    <div class="waiting-msg">
+      <div class="spinner">⏳</div>
+      等待主持人開始遊戲…
+    </div>
+  </div>
+</div>
+
+<!-- 勝利 Overlay -->
+<div class="overlay" id="overlay-win">
+  <div class="win-emoji">🏆</div>
+  <div class="win-title">獲勝者</div>
+  <div class="win-name" id="win-name">—</div>
+  <div class="win-sub"  id="win-sub">—</div>
+</div>
+
+<script type="module">
+  import { db } from './firebase-config.js';
+  import { ref, get, onValue } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+
+  let roomCode    = '';
+  let winScore    = 3;
+  let unsubscribe = null;
+
+  // URL 參數自動填入房間代碼
+  const urlRoom = new URLSearchParams(location.search).get('room');
+  if (urlRoom) {
+    document.getElementById('room-code-input').value = urlRoom.toUpperCase();
+    setTimeout(joinRoom, 300);
+  }
+
+  window.joinRoom = async () => {
+    const code = document.getElementById('room-code-input').value.trim().toUpperCase();
+    if (code.length !== 4) return setError('請輸入 4 個字母的房間代碼');
+
+    const joinBtn = document.querySelector('.join-btn');
+    joinBtn.disabled = true;
+    joinBtn.textContent = '連線中…';
+    setError('');
+
+    try {
+      const snapshot = await get(ref(db, `rooms/${code}`));
+      if (!snapshot.exists()) {
+        setError('找不到此房間，請確認代碼');
+        return;
+      }
+      roomCode = code;
+      document.getElementById('screen-join').classList.remove('active');
+      document.getElementById('screen-game').classList.add('active');
+      document.getElementById('display-code').textContent = roomCode;
+      subscribeRoom();
+    } catch (err) {
+      setError('連線失敗：' + err.message);
+      console.error(err);
+    } finally {
+      joinBtn.disabled = false;
+      joinBtn.textContent = '加入';
+    }
+  };
+
+  function subscribeRoom() {
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+    const roomRef = ref(db, `rooms/${roomCode}`);
+    unsubscribe = onValue(roomRef, snapshot => {
+      const data = snapshot.val();
+      if (!data) { leaveRoom(); return; }
+
+      winScore = data.winScore || 3;
+      renderScores(data.players || {});
+      renderNowPlaying(data.currentSong || {});
+      if (data.winner) showWinner(data.winner);
+    });
+  }
+
+  function renderScores(players) {
+    const grid  = document.getElementById('scores-grid');
+    const sorted = Object.entries(players).sort((a, b) => (b[1].score||0) - (a[1].score||0));
+    const maxScore = sorted[0]?.[1]?.score || 0;
+
+    grid.innerHTML = '';
+    sorted.forEach(([name, info], i) => {
+      const score    = info.score || 0;
+      const pct      = Math.min(100, (score / winScore) * 100);
+      const isLeading = score > 0 && score === maxScore;
+      const rankEmoji = ['🥇','🥈','🥉'][i] || `${i+1}.`;
+
+      const card = document.createElement('div');
+      card.className = 'score-card' + (isLeading ? ' leading' : '');
+      card.innerHTML = `
+        <div class="rank">${rankEmoji}</div>
+        <div class="info">
+          <div class="p-name">${name}</div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar" style="width:${pct}%"></div>
+          </div>
+        </div>
+        <div class="score-text">${score}<span style="font-size:14px;color:rgba(255,255,255,.4)">/${winScore}</span></div>`;
+      grid.appendChild(card);
+    });
+  }
+
+  function renderNowPlaying(song) {
+    const el = document.getElementById('now-playing');
+    if (song && song.title) {
+      document.getElementById('np-title').textContent  = song.title;
+      document.getElementById('np-artist').textContent = song.artist;
+      el.classList.add('show');
+    } else {
+      el.classList.remove('show');
+    }
+  }
+
+  function showWinner(name) {
+    document.getElementById('win-name').textContent = name;
+    document.getElementById('win-sub').textContent  = `集滿 ${winScore} 張牌！`;
+    document.getElementById('overlay-win').classList.add('show');
+  }
+
+  window.leaveRoom = () => {
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+    roomCode = '';
+    document.getElementById('overlay-win').classList.remove('show');
+    document.getElementById('screen-game').classList.remove('active');
+    document.getElementById('screen-join').classList.add('active');
+    document.getElementById('scores-grid').innerHTML = `
+      <div class="waiting-msg">
+        <div class="spinner">⏳</div>等待主持人開始遊戲…
+      </div>`;
+  };
+
+  function setError(msg) {
+    document.getElementById('error-msg').textContent = msg;
+  }
+</script>
+</body>
+</html>

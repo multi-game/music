@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>猜歌遊戲 · 主持人</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0f0c29;
+      --surface: rgba(255,255,255,.08);
+      --border:  rgba(255,255,255,.14);
+      --accent:  #667eea;
+      --green:   #4ade80;
+      --red:     #f87171;
+      --yellow:  #fbbf24;
+    }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      color: #fff;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      padding: 16px;
+    }
+
+    /* ── 通用 ── */
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+    h2 { font-size: 15px; font-weight: 600; color: rgba(255,255,255,.7); margin-bottom: 16px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 14px;
+      /* backdrop-filter 故意移除：它會建立 stacking context，導致內部下拉選單被後續 card 遮住 */
+    }
+
+    /* 選歌 card 需要浮在玩家 card 上方 */
+    .card-song-picker {
+      position: relative;
+      z-index: 10;
+    }
+
+    label { font-size: 12px; color: rgba(255,255,255,.5); letter-spacing: 1px; display: block; margin-bottom: 6px; }
+
+    input[type=text], input[type=number], select {
+      width: 100%;
+      background: rgba(255,255,255,.06);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 15px;
+      padding: 10px 14px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    input[type=text]:focus,
+    input[type=number]:focus { border-color: var(--accent); }
+    input[type=text]::placeholder { color: rgba(255,255,255,.3); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform .15s, opacity .2s;
+    }
+    .btn:active { transform: scale(.95); }
+    .btn:disabled { opacity: .35; cursor: default; }
+    .btn-primary { background: var(--accent); color: #fff; width: 100%; }
+    .btn-sm      { padding: 8px 14px; font-size: 13px; border-radius: 10px; }
+    .btn-green   { background: var(--green); color: #000; }
+    .btn-red     { background: var(--red);   color: #fff; }
+    .btn-ghost   { background: rgba(255,255,255,.1); color: #fff; }
+
+    /* ── 設定畫面 ── */
+    .player-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .player-row input { flex: 1; }
+    .remove-btn {
+      width: 34px; height: 34px;
+      border-radius: 8px;
+      background: rgba(248,113,113,.2);
+      border: 1px solid rgba(248,113,113,.4);
+      color: var(--red);
+      font-size: 16px;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .add-player-btn {
+      width: 100%;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px dashed var(--border);
+      background: transparent;
+      color: rgba(255,255,255,.5);
+      font-size: 13px;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .add-player-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── 遊戲畫面 ── */
+    .room-badge {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(102,126,234,.2);
+      border: 1px solid rgba(102,126,234,.4);
+      border-radius: 12px;
+      padding: 10px 16px;
+      margin-bottom: 14px;
+    }
+    .room-badge .code {
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: 4px;
+      color: var(--accent);
+    }
+    .room-badge .hint { font-size: 11px; color: rgba(255,255,255,.5); }
+
+    /* 年份快捷篩選 */
+    .year-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .yf-btn {
+      padding: 5px 11px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,.2);
+      background: transparent;
+      color: rgba(255,255,255,.55);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .yf-btn:hover  { border-color: var(--accent); color: var(--accent); }
+    .yf-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    .yf-custom     { border-style: dashed; }
+
+    .year-custom {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .year-custom input {
+      width: 90px;
+      padding: 7px 10px;
+      font-size: 13px;
+    }
+    .yf-apply-btn {
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .yf-apply-btn:active { transform: scale(.95); }
+
+    /* 歌曲選擇器 */
+    .song-picker { position: relative; }
+    .song-picker input { padding-right: 40px; }
+    .song-list-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0; right: 0;
+      background: #1e1b4b;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 100;
+      display: none;
+    }
+    .song-list-dropdown.open { display: block; }
+    .song-option {
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 13px;
+      border-bottom: 1px solid rgba(255,255,255,.05);
+    }
+    .song-option:hover { background: rgba(255,255,255,.08); }
+    .song-option .s-artist { font-size: 11px; color: rgba(255,255,255,.45); margin-top: 2px; }
+
+    .now-playing {
+      background: rgba(74,222,128,.1);
+      border: 1px solid rgba(74,222,128,.3);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-top: 10px;
+      display: none;
+    }
+    .now-playing.show { display: block; }
+    .now-playing .np-label  { font-size: 11px; color: var(--green); letter-spacing: 1px; margin-bottom: 4px; }
+    .now-playing .np-title  { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+    .now-playing .np-artist { font-size: 12px; color: rgba(255,255,255,.6); margin-bottom: 12px; }
+
+    /* 播放控制 */
+    .audio-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .audio-controls .play-btn {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      border: none;
+      background: var(--green);
+      color: #000;
+      font-size: 16px;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform .15s;
+    }
+    .audio-controls .play-btn:active { transform: scale(.92); }
+    .audio-controls .replay-btn {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255,255,255,.12);
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform .15s;
+    }
+    .audio-controls .replay-btn:active { transform: scale(.92); }
+    .audio-progress {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255,255,255,.2);
+      outline: none;
+      cursor: pointer;
+    }
+    .audio-progress::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: #fff;
+    }
+    .audio-time { font-size: 11px; color: rgba(255,255,255,.45); flex-shrink: 0; }
+    .no-preview { font-size: 11px; color: rgba(248,113,113,.8); margin-top: 8px; }
+
+    /* 玩家分數卡 */
+    .players-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
+    .player-card {
+      background: rgba(255,255,255,.06);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 12px;
+      text-align: center;
+      transition: border-color .2s;
+    }
+    .player-card.winner-card {
+      border-color: var(--yellow);
+      background: rgba(251,191,36,.1);
+    }
+    .player-card .p-name { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+    .player-card .p-score {
+      font-size: 28px;
+      font-weight: 900;
+      color: var(--accent);
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .player-card .p-dots { font-size: 18px; margin-bottom: 10px; letter-spacing: 2px; }
+    .player-card .p-win  { font-size: 11px; color: rgba(255,255,255,.4); margin-bottom: 10px; }
+    .player-card .guess-btn {
+      width: 100%;
+      padding: 9px;
+      border-radius: 9px;
+      border: none;
+      background: var(--green);
+      color: #000;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .15s, opacity .15s;
+    }
+    .player-card .guess-btn:active  { transform: scale(.95); }
+    .player-card .guess-btn:disabled { opacity: .35; cursor: default; }
+
+    /* ── 勝利 Overlay ── */
+    .overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.75);
+      backdrop-filter: blur(8px);
+      z-index: 200;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 32px;
+    }
+    .overlay.show { display: flex; }
+    .win-emoji  { font-size: 80px; margin-bottom: 16px; animation: bounce 1s infinite; }
+    .win-title  { font-size: 18px; color: rgba(255,255,255,.6); margin-bottom: 8px; }
+    .win-name   { font-size: 48px; font-weight: 900; color: var(--yellow); margin-bottom: 24px; }
+    .win-score  { font-size: 16px; color: rgba(255,255,255,.6); margin-bottom: 32px; }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-12px); }
+    }
+
+    /* toast */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: rgba(30,27,75,.95);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 20px;
+      font-size: 13px;
+      opacity: 0;
+      transition: opacity .3s;
+      pointer-events: none;
+      z-index: 300;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; }
+
+    .section-title {
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: rgba(255,255,255,.4);
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════ 設定畫面 ══════════════════ -->
+<div id="screen-setup" class="screen active">
+  <div style="max-width:480px; margin:0 auto; padding-top:20px;">
+    <div style="margin-bottom:24px;">
+      <h1>🎵 猜歌遊戲</h1>
+      <h2>主持人設定</h2>
+    </div>
+
+    <div class="card">
+      <label>玩家名稱（2～5 人）</label>
+      <div id="player-inputs">
+        <div class="player-row">
+          <input type="text" placeholder="玩家 1" maxlength="12" />
+          <button class="remove-btn" onclick="removePlayer(this)">×</button>
+        </div>
+        <div class="player-row">
+          <input type="text" placeholder="玩家 2" maxlength="12" />
+          <button class="remove-btn" onclick="removePlayer(this)">×</button>
+        </div>
+        <div class="player-row">
+          <input type="text" placeholder="玩家 3" maxlength="12" />
+          <button class="remove-btn" onclick="removePlayer(this)">×</button>
+        </div>
+      </div>
+      <button class="add-player-btn" id="add-player-btn" onclick="addPlayer()">＋ 新增玩家</button>
+    </div>
+
+    <div class="card">
+      <label>勝利條件：得到幾張牌獲勝？</label>
+      <input type="number" id="win-score" value="3" min="1" max="20" />
+    </div>
+
+    <button class="btn btn-primary" onclick="createRoom()">建立房間 →</button>
+  </div>
+</div>
+
+<!-- ══════════════════ 遊戲畫面 ══════════════════ -->
+<div id="screen-game" class="screen">
+  <div style="max-width:520px; margin:0 auto; padding-top:12px;">
+
+    <!-- 房間代碼 -->
+    <div class="room-badge">
+      <div>
+        <div class="hint">房間代碼（給玩家輸入）</div>
+        <div class="code" id="display-room-code">----</div>
+      </div>
+      <button class="btn btn-sm btn-ghost" onclick="copyRoomCode()">複製</button>
+    </div>
+
+    <!-- 選歌 -->
+    <div class="card card-song-picker">
+      <div class="section-title">選擇本輪歌曲</div>
+
+      <!-- 年份快捷篩選 -->
+      <div class="year-filters" id="year-filters">
+        <button class="yf-btn active" data-from="" data-to="">全部</button>
+        <button class="yf-btn" data-from="" data-to="1979">1980 前</button>
+        <button class="yf-btn" data-from="1980" data-to="1990">1980–1990</button>
+        <button class="yf-btn" data-from="1991" data-to="2000">1991–2000</button>
+        <button class="yf-btn" data-from="2001" data-to="2015">2001–2015</button>
+        <button class="yf-btn" data-from="2016" data-to="">2016 後</button>
+        <button class="yf-btn yf-custom" id="yf-custom-btn" data-from="" data-to="">自訂</button>
+      </div>
+      <!-- 自訂年份輸入 -->
+      <div class="year-custom" id="year-custom" style="display:none">
+        <input type="number" id="year-from" placeholder="起始年" min="1900" max="2100" />
+        <span style="color:rgba(255,255,255,.4)">—</span>
+        <input type="number" id="year-to"   placeholder="結束年" min="1900" max="2100" />
+        <button class="yf-apply-btn" onclick="applyCustomYear()">套用</button>
+      </div>
+
+      <div class="song-picker">
+        <input type="text" id="song-search" placeholder="搜尋歌名或歌手…" autocomplete="off"
+               oninput="filterSongs(this.value)" onfocus="openDropdown()" />
+        <div class="song-list-dropdown" id="song-dropdown"></div>
+      </div>
+      <div class="now-playing" id="now-playing">
+        <div class="np-label">▶ NOW PLAYING</div>
+        <div class="np-title"  id="np-title">—</div>
+        <div class="np-artist" id="np-artist">—</div>
+        <div class="audio-controls">
+          <button class="play-btn"   id="btn-play"  title="播放/暫停">▶</button>
+          <button class="replay-btn" id="btn-replay" title="重聽">↩</button>
+          <input  class="audio-progress" id="audio-progress" type="range" min="0" max="100" value="0" step="0.1" />
+          <span   class="audio-time" id="audio-time">0:00</span>
+        </div>
+        <div class="no-preview" id="no-preview" style="display:none">⚠ 此曲無試聽連結</div>
+      </div>
+      <audio id="host-audio"></audio>
+    </div>
+
+    <!-- 玩家分數 -->
+    <div class="card">
+      <div class="section-title">玩家分數</div>
+      <div class="players-grid" id="players-grid"></div>
+    </div>
+
+    <button class="btn btn-sm btn-ghost" style="width:100%; margin-top:4px;"
+            onclick="if(confirm('確定結束本局？'))endGame()">結束遊戲</button>
+  </div>
+</div>
+
+<!-- ══════════════════ 勝利 Overlay ══════════════════ -->
+<div class="overlay" id="overlay-win">
+  <div class="win-emoji">🏆</div>
+  <div class="win-title">獲勝者</div>
+  <div class="win-name" id="win-name">—</div>
+  <div class="win-score" id="win-score-text">—</div>
+  <button class="btn btn-primary" style="max-width:200px;" onclick="endGame()">結束本局</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ══════════════════ Script ══════════════════ -->
+<script type="module">
+  import { db } from './firebase-config.js';
+  import {
+    ref, set, get, update, onValue, remove
+  } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+
+  // ── 狀態 ──
+  let songs       = [];
+  let roomCode    = '';
+  let winScore    = 3;
+  let players     = [];
+  let unsubscribe = null;
+  let songsLoaded = false;
+
+  // ── 音樂播放 ──
+  const audio    = document.getElementById('host-audio');
+  const btnPlay  = document.getElementById('btn-play');
+  const btnReplay= document.getElementById('btn-replay');
+  const progBar  = document.getElementById('audio-progress');
+  const timeEl   = document.getElementById('audio-time');
+  const noPreview= document.getElementById('no-preview');
+
+  const fmt = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+
+  btnPlay.addEventListener('click', () => {
+    if (!audio.src) return;
+    audio.paused ? audio.play() : audio.pause();
+  });
+  btnReplay.addEventListener('click', () => {
+    if (!audio.src) return;
+    audio.currentTime = 0;
+    audio.play();
+  });
+  progBar.addEventListener('input', () => {
+    if (audio.duration) audio.currentTime = (progBar.value / 100) * audio.duration;
+  });
+  audio.addEventListener('play',  () => { btnPlay.textContent = '⏸'; });
+  audio.addEventListener('pause', () => { btnPlay.textContent = '▶'; });
+  audio.addEventListener('ended', () => { btnPlay.textContent = '▶'; });
+  audio.addEventListener('timeupdate', () => {
+    if (!audio.duration) return;
+    progBar.value = (audio.currentTime / audio.duration) * 100;
+    timeEl.textContent = fmt(audio.currentTime);
+  });
+
+  // ── 載入歌曲（等待完成再解鎖建立按鈕）──
+  const createBtn = document.querySelector('.btn-primary');
+  createBtn.disabled = true;
+  createBtn.textContent = '載入歌曲中…';
+
+  fetch(`songs.json?v=${Date.now()}`)
+    .then(r => r.json())
+    .then(d => {
+      songs = d;
+      songsLoaded = true;
+      createBtn.disabled = false;
+      createBtn.textContent = '建立房間 →';
+    })
+    .catch(() => {
+      createBtn.textContent = '❌ 找不到 songs.json';
+    });
+
+  // ── 玩家列表操作 ──
+  window.addPlayer = () => {
+    const rows = document.querySelectorAll('#player-inputs .player-row');
+    if (rows.length >= 5) return showToast('最多 5 位玩家');
+    const div = document.createElement('div');
+    div.className = 'player-row';
+    div.innerHTML = `<input type="text" placeholder="玩家 ${rows.length + 1}" maxlength="12" />
+                     <button class="remove-btn" onclick="window.removePlayer(this)">×</button>`;
+    document.getElementById('player-inputs').appendChild(div);
+    if (rows.length >= 4) document.getElementById('add-player-btn').style.display = 'none';
+  };
+
+  window.removePlayer = (btn) => {
+    const rows = document.querySelectorAll('#player-inputs .player-row');
+    if (rows.length <= 2) return showToast('至少需要 2 位玩家');
+    btn.closest('.player-row').remove();
+    document.getElementById('add-player-btn').style.display = '';
+  };
+
+  // ── 建立房間 ──
+  window.createRoom = async () => {
+    if (!songsLoaded) return showToast('歌曲載入中，請稍後');
+
+    const inputs = document.querySelectorAll('#player-inputs input');
+    players = [...inputs].map(i => i.value.trim()).filter(Boolean);
+    if (players.length < 2) return showToast('請輸入至少 2 位玩家名稱');
+
+    winScore = parseInt(document.getElementById('win-score').value) || 3;
+    roomCode = randomCode();
+
+    const playerData = {};
+    players.forEach(name => { playerData[name] = { score: 0 }; });
+
+    createBtn.disabled = true;
+    createBtn.textContent = '建立中…';
+
+    try {
+      await set(ref(db, `rooms/${roomCode}`), {
+        state:       'playing',
+        winScore,
+        currentSong: { id: 0, title: '', artist: '' },
+        winner:      '',
+        players:     playerData,
+      });
+      startGame();
+      subscribeRoom();
+    } catch (err) {
+      showToast('Firebase 連線失敗：' + err.message);
+      console.error(err);
+    } finally {
+      createBtn.disabled = false;
+      createBtn.textContent = '建立房間 →';
+    }
+  };
+
+  function startGame() {
+    document.getElementById('screen-setup').classList.remove('active');
+    document.getElementById('screen-game').classList.add('active');
+    document.getElementById('display-room-code').textContent = roomCode;
+    renderPlayers(Object.fromEntries(players.map(p => [p, { score: 0 }])));
+    buildSongDropdown(songs);
+  }
+
+  // ── Firebase 即時同步 ──
+  function subscribeRoom() {
+    if (unsubscribe) unsubscribe();
+    const roomRef = ref(db, `rooms/${roomCode}`);
+    unsubscribe = onValue(roomRef, snapshot => {
+      const data = snapshot.val();
+      if (!data) return;
+      winScore = data.winScore || 3;
+      renderPlayers(data.players || {});
+      renderNowPlaying(data.currentSong || {});
+      if (data.winner) showWinner(data.winner, data.winScore);
+    }, err => {
+      showToast('Firebase 錯誤：' + err.message);
+      console.error(err);
+    });
+  }
+
+  // ── 渲染玩家卡片 ──
+  function renderPlayers(playersData) {
+    const grid = document.getElementById('players-grid');
+    grid.innerHTML = '';
+    Object.entries(playersData).forEach(([name, info]) => {
+      const score = info.score || 0;
+      const dots  = '●'.repeat(score) + '○'.repeat(Math.max(0, winScore - score));
+      const div   = document.createElement('div');
+      div.className = 'player-card' + (score >= winScore ? ' winner-card' : '');
+      div.innerHTML = `
+        <div class="p-name">${name}</div>
+        <div class="p-score">${score}</div>
+        <div class="p-dots">${dots}</div>
+        <div class="p-win">目標 ${winScore} 張</div>
+        <button class="guess-btn" data-player="${name}">✓ 猜對了！</button>`;
+      div.querySelector('.guess-btn').addEventListener('click', () => awardPoint(name));
+      grid.appendChild(div);
+    });
+  }
+
+  // ── 渲染目前播放 ──
+  function renderNowPlaying(song) {
+    const el = document.getElementById('now-playing');
+    if (song && song.title) {
+      document.getElementById('np-title').textContent  = song.title;
+      document.getElementById('np-artist').textContent = song.artist;
+      el.classList.add('show');
+    } else {
+      el.classList.remove('show');
+    }
+  }
+
+  // ── 給分（改用 get 讀取一次）──
+  window.awardPoint = async (playerName) => {
+    try {
+      const snap     = await get(ref(db, `rooms/${roomCode}/players/${playerName}/score`));
+      const current  = snap.val() || 0;
+      const newScore = current + 1;
+      await update(ref(db, `rooms/${roomCode}/players/${playerName}`), { score: newScore });
+      showToast(`${playerName} ＋1 🎉`);
+      if (newScore >= winScore) {
+        await update(ref(db, `rooms/${roomCode}`), { winner: playerName, state: 'ended' });
+      }
+    } catch (err) {
+      showToast('給分失敗：' + err.message);
+      console.error(err);
+    }
+  };
+
+  // ── 選歌 ──
+  // ── 年份篩選狀態 ──
+  let yearFrom = '';
+  let yearTo   = '';
+
+  function getYearFiltered() {
+    return songs.filter(s => {
+      const y = parseInt(s.year) || 0;
+      if (yearFrom && y < parseInt(yearFrom)) return false;
+      if (yearTo   && y > parseInt(yearTo))   return false;
+      return true;
+    });
+  }
+
+  // 快捷按鈕點擊
+  document.getElementById('year-filters').addEventListener('click', e => {
+    const btn = e.target.closest('.yf-btn');
+    if (!btn) return;
+
+    // 自訂按鈕：展開輸入框
+    if (btn.id === 'yf-custom-btn') {
+      const box = document.getElementById('year-custom');
+      const isOpen = box.style.display !== 'none';
+      box.style.display = isOpen ? 'none' : 'flex';
+      if (!isOpen) document.getElementById('year-from').focus();
+      return;
+    }
+
+    // 一般快捷按鈕
+    document.querySelectorAll('.yf-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    yearFrom = btn.dataset.from;
+    yearTo   = btn.dataset.to;
+    document.getElementById('year-custom').style.display = 'none';
+    refreshDropdown();
+  });
+
+  // 套用自訂年份
+  window.applyCustomYear = () => {
+    const from = document.getElementById('year-from').value.trim();
+    const to   = document.getElementById('year-to').value.trim();
+    yearFrom = from;
+    yearTo   = to;
+    document.querySelectorAll('.yf-btn').forEach(b => b.classList.remove('active'));
+    const customBtn = document.getElementById('yf-custom-btn');
+    customBtn.classList.add('active');
+    customBtn.textContent = (from || '…') + '–' + (to || '…');
+    refreshDropdown();
+  };
+
+  function refreshDropdown() {
+    const q = document.getElementById('song-search').value.trim();
+    filterSongs(q);
+  }
+
+  window.filterSongs = (q) => {
+    const base  = getYearFiltered();
+    const lower = q.toLowerCase().trim();
+    const list  = lower
+      ? base.filter(s =>
+          s.title.toLowerCase().includes(lower) ||
+          s.artist.toLowerCase().includes(lower))
+      : base;
+
+    if (!lower) {
+      buildHintDropdown(base.length);
+    } else {
+      buildSongDropdown(list);
+    }
+    document.getElementById('song-dropdown').classList.add('open');
+  };
+
+  window.openDropdown = () => {
+    const base = getYearFiltered();
+    buildHintDropdown(base.length);
+    document.getElementById('song-dropdown').classList.add('open');
+  };
+
+  function buildHintDropdown(count) {
+    const label = (yearFrom || yearTo)
+      ? `${yearFrom || '最早'}–${yearTo || '最新'}　共 ${count} 首`
+      : `共 ${count} 首`;
+    const dd = document.getElementById('song-dropdown');
+    dd.innerHTML = `<div style="padding:12px 14px; font-size:12px; color:rgba(255,255,255,.4); text-align:center;">
+      🎵 輸入歌名或歌手搜尋（${label}）
+    </div>`;
+  }
+
+  function buildSongDropdown(list) {
+    const dd = document.getElementById('song-dropdown');
+    dd.innerHTML = '';
+    if (!list.length) {
+      dd.innerHTML = `<div style="padding:12px 14px; font-size:12px; color:rgba(255,255,255,.4); text-align:center;">找不到符合的歌曲</div>`;
+      return;
+    }
+    list.slice(0, 50).forEach(song => {
+      const div = document.createElement('div');
+      div.className = 'song-option';
+      div.innerHTML = `<div>${song.title}</div><div class="s-artist">${song.artist} · ${song.year}</div>`;
+      div.addEventListener('click', () => selectSong(song));
+      dd.appendChild(div);
+    });
+    if (list.length > 50) {
+      dd.innerHTML += `<div style="padding:8px 14px; font-size:11px; color:rgba(255,255,255,.3); text-align:center;">還有 ${list.length - 50} 首，請輸入更多關鍵字縮小範圍</div>`;
+    }
+  }
+
+  function selectSong(song) {
+    document.getElementById('song-search').value = `${song.title} — ${song.artist}`;
+    document.getElementById('song-dropdown').classList.remove('open');
+
+    // 更新 Firebase（廣播給 scores.html）
+    if (roomCode) {
+      update(ref(db, `rooms/${roomCode}/currentSong`), {
+        id:     song.id,
+        title:  song.title,
+        artist: song.artist,
+      }).catch(err => showToast('更新歌曲失敗：' + err.message));
+    }
+
+    // 播放試聽
+    document.getElementById('now-playing').classList.add('show');
+    document.getElementById('np-title').textContent  = song.title;
+    document.getElementById('np-artist').textContent = `${song.artist} · ${song.year}`;
+    progBar.value      = 0;
+    timeEl.textContent = '0:00';
+    btnPlay.textContent = '▶';
+
+    if (song.url) {
+      noPreview.style.display = 'none';
+      audio.src = song.url;
+      audio.load();
+      audio.play().catch(() => showToast('播放失敗，請點播放鍵重試'));
+    } else {
+      noPreview.style.display = 'block';
+      audio.src = '';
+      btnPlay.textContent = '—';
+    }
+  }
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.song-picker'))
+      document.getElementById('song-dropdown').classList.remove('open');
+  });
+
+  // ── 勝利 ──
+  function showWinner(name, ws) {
+    document.getElementById('win-name').textContent       = name;
+    document.getElementById('win-score-text').textContent = `集滿 ${ws || winScore} 張牌！`;
+    document.getElementById('overlay-win').classList.add('show');
+  }
+
+  window.endGame = async () => {
+    try {
+      if (roomCode) await remove(ref(db, `rooms/${roomCode}`));
+    } catch (e) { console.warn(e); }
+    document.getElementById('overlay-win').classList.remove('show');
+    document.getElementById('screen-game').classList.remove('active');
+    document.getElementById('screen-setup').classList.add('active');
+    document.getElementById('song-search').value = '';
+    document.getElementById('now-playing').classList.remove('show');
+    roomCode = '';
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+  };
+
+  // ── 工具 ──
+  function randomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  }
+
+  window.copyRoomCode = () => {
+    navigator.clipboard.writeText(roomCode)
+      .then(() => showToast('房間代碼已複製！'))
+      .catch(() => showToast(`房間代碼：${roomCode}`));
+  };
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+</script>
+</body>
+</html>
