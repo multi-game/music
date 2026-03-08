@@ -35,6 +35,31 @@
     .join-card h1   { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
     .join-card p    { font-size: 14px; color: rgba(255,255,255,.5); margin-bottom: 28px; }
 
+    .nick-input {
+      width: 100%;
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      text-align: center;
+      padding: 12px;
+      outline: none;
+      margin-bottom: 12px;
+      transition: border-color .2s;
+    }
+    .nick-input:focus { border-color: #667eea; }
+    .nick-input::placeholder { color: rgba(255,255,255,.3); font-weight: 400; }
+
+    .input-label {
+      font-size: 12px;
+      color: rgba(255,255,255,.4);
+      text-align: left;
+      margin-bottom: 6px;
+      letter-spacing: 1px;
+    }
+
     .code-input-wrap {
       display: flex;
       gap: 10px;
@@ -275,7 +300,12 @@
   <div class="join-card">
     <div class="logo">🎵</div>
     <h1>猜歌遊戲</h1>
-    <p>輸入主持人的房間代碼加入</p>
+    <p>輸入暱稱與房間代碼加入遊戲</p>
+    <div class="input-label">暱稱</div>
+    <input class="nick-input" id="nick-input" maxlength="12"
+           placeholder="輸入你的暱稱"
+           onkeydown="if(event.key==='Enter')document.getElementById('room-code-input').focus()" />
+    <div class="input-label">房間代碼</div>
     <div class="code-input-wrap">
       <input class="code-input" id="room-code-input" maxlength="4"
              placeholder="ABCD" oninput="this.value=this.value.toUpperCase()"
@@ -328,6 +358,7 @@
   let roomCode    = '';
   let winScore    = 3;
   let unsubscribe = null;
+  let playerNick  = '';
 
   // URL 參數自動填入房間代碼
   const urlRoom = new URLSearchParams(location.search).get('room');
@@ -337,6 +368,8 @@
   }
 
   window.joinRoom = async () => {
+    const nick = document.getElementById('nick-input').value.trim();
+    if (!nick) return setError('請輸入你的暱稱');
     const code = document.getElementById('room-code-input').value.trim().toUpperCase();
     if (code.length !== 4) return setError('請輸入 4 個字母的房間代碼');
 
@@ -351,7 +384,8 @@
         setError('找不到此房間，請確認代碼');
         return;
       }
-      roomCode = code;
+      roomCode   = code;
+      playerNick = nick;
       document.getElementById('screen-join').classList.remove('active');
       document.getElementById('screen-game').classList.add('active');
       document.getElementById('display-code').textContent = roomCode;
@@ -382,7 +416,7 @@
       const btn = document.getElementById('buzz-btn');
       if (data.buzzed) {
         btn.disabled = true;
-        btn.textContent = '⏸ 已答題';
+        btn.textContent = `⏸ ${data.buzzedBy || '玩家'}答題中`;
       } else {
         btn.disabled = false;
         btn.textContent = '🙋 答題';
@@ -441,7 +475,7 @@
     btn.classList.add('flashing');
     setTimeout(() => btn.classList.remove('flashing'), 600);
     try {
-      await update(ref(db, `rooms/${roomCode}`), { buzzed: true });
+      await update(ref(db, `rooms/${roomCode}`), { buzzed: true, buzzedBy: playerNick || '玩家' });
     } catch (e) {
       btn.disabled = false;
       btn.textContent = '🙋 答題';

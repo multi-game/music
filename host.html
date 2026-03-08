@@ -720,14 +720,15 @@
           audio._wasPlaying = true;
           audio.pause();
         }
+        const buzzer = data.buzzedBy || '玩家';
         if (!wasBuzzed) {
-          showToast('🙋 有玩家按下答題！');
+          showToast(`🙋 ${buzzer} 按下答題！`);
         }
         audio._buzzShowing = true;
-        showBuzzAlert(true);
+        showBuzzAlert(buzzer);
       } else {
         audio._buzzShowing = false;
-        showBuzzAlert(false);
+        showBuzzAlert(null);
       }
     }, err => {
       showToast('Firebase 錯誤：' + err.message);
@@ -948,14 +949,18 @@
   });
 
   // ── 答題提示 ──
-  function showBuzzAlert(show) {
+  function showBuzzAlert(buzzerName) {
     const el = document.getElementById('buzz-alert');
-    el.style.display = show ? 'flex' : 'none';
+    if (buzzerName) {
+      document.getElementById('buzz-name').textContent = buzzerName;
+      el.style.display = 'flex';
+    } else {
+      el.style.display = 'none';
+    }
   }
 
   window.clearBuzz = async () => {
-    await update(ref(db, `rooms/${roomCode}`), { buzzed: false });
-    // 若答題前正在播放，自動恢復
+    await update(ref(db, `rooms/${roomCode}`), { buzzed: false, buzzedBy: '' });
     if (audio._wasPlaying && audio.src) {
       audio._wasPlaying = false;
       audio.play().catch(() => {});
@@ -1012,7 +1017,7 @@
   font-size:16px; font-weight:700;
   animation: buzzPulse .5s ease-in-out infinite alternate;
 ">
-  <span>🙋 有玩家按下答題！音樂已暫停</span>
+  <span>🙋 <strong id="buzz-name">玩家</strong> 按下答題！音樂已暫停</span>
   <button onclick="clearBuzz()" style="
     padding:8px 20px; border-radius:8px; border:none;
     background:#fff; color:#667eea;
