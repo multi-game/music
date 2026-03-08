@@ -194,6 +194,56 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* 答題按鈕列 */
+    .buzz-bar {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 480px;
+      padding: 16px 20px 36px;
+      background: linear-gradient(to top, rgba(15,12,41,.98) 60%, transparent);
+      display: flex;
+      justify-content: center;
+      z-index: 50;
+      pointer-events: none;
+    }
+    .buzz-bar .buzz-btn {
+      pointer-events: all;
+    }
+    .buzz-btn {
+      width: 100%;
+      max-width: 400px;
+      padding: 18px;
+      border-radius: 16px;
+      border: none;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: #fff;
+      font-size: 22px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(102,126,234,.5);
+      transition: transform .15s, box-shadow .15s;
+      letter-spacing: 2px;
+    }
+    .buzz-btn:active { transform: scale(.96); box-shadow: 0 4px 12px rgba(102,126,234,.4); }
+    .buzz-btn:disabled {
+      background: rgba(255,255,255,.1);
+      color: rgba(255,255,255,.3);
+      box-shadow: none;
+      cursor: default;
+    }
+    /* 答題成功閃爍 */
+    @keyframes buzzFlash {
+      0%   { background: linear-gradient(135deg, #4ade80, #16a34a); box-shadow: 0 0 40px rgba(74,222,128,.8); }
+      100% { background: linear-gradient(135deg, #667eea, #764ba2); box-shadow: 0 8px 24px rgba(102,126,234,.5); }
+    }
+    .buzz-btn.flashing { animation: buzzFlash .6s ease-out forwards; }
+
+    /* 為底部按鈕預留空間 */
+    #screen-game { padding-bottom: 100px; }
+
     /* 勝利 Overlay */
     .overlay {
       display: none;
@@ -247,8 +297,6 @@
     <div class="np-icon">🎵</div>
     <div>
       <div class="np-label">NOW PLAYING</div>
-      <div class="np-title"  id="np-title">—</div>
-      <div class="np-artist" id="np-artist">—</div>
     </div>
   </div>
 
@@ -257,6 +305,11 @@
       <div class="spinner">⏳</div>
       等待主持人開始遊戲…
     </div>
+  </div>
+
+  <!-- 答題按鈕：固定在畫面底部 -->
+  <div class="buzz-bar">
+    <button class="buzz-btn" id="buzz-btn" onclick="buzzeIn()">🙋 答題</button>
   </div>
 </div>
 
@@ -270,7 +323,7 @@
 
 <script type="module">
   import { db } from './firebase-config.js';
-  import { ref, get, onValue } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+  import { ref, get, update, onValue } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
 
   let roomCode    = '';
   let winScore    = 3;
@@ -302,6 +355,7 @@
       document.getElementById('screen-join').classList.remove('active');
       document.getElementById('screen-game').classList.add('active');
       document.getElementById('display-code').textContent = roomCode;
+      // buzz-bar 由 CSS 控制，隨 screen-game 一起顯示
       subscribeRoom();
     } catch (err) {
       setError('連線失敗：' + err.message);
@@ -323,6 +377,17 @@
       renderScores(data.players || {});
       renderNowPlaying(data.currentSong || {});
       if (data.winner) showWinner(data.winner);
+
+      // 答題按鈕狀態：依 buzzed 旗標同步
+      const btn = document.getElementById('buzz-btn');
+      if (data.buzzed) {
+        btn.disabled = true;
+        btn.textContent = '⏸ 已答題';
+      } else {
+        btn.disabled = false;
+        btn.textContent = '🙋 答題';
+        btn.classList.remove('flashing');
+      }
     });
   }
 
@@ -356,8 +421,6 @@
   function renderNowPlaying(song) {
     const el = document.getElementById('now-playing');
     if (song && song.title) {
-      document.getElementById('np-title').textContent  = song.title;
-      document.getElementById('np-artist').textContent = song.artist;
       el.classList.add('show');
     } else {
       el.classList.remove('show');
@@ -370,9 +433,25 @@
     document.getElementById('overlay-win').classList.add('show');
   }
 
+  // ── 答題 ──
+  window.buzzeIn = async () => {
+    const btn = document.getElementById('buzz-btn');
+    btn.disabled = true;
+    btn.textContent = '⏸ 已按答題';
+    btn.classList.add('flashing');
+    setTimeout(() => btn.classList.remove('flashing'), 600);
+    try {
+      await update(ref(db, `rooms/${roomCode}`), { buzzed: true });
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = '🙋 答題';
+    }
+  };
+
   window.leaveRoom = () => {
     if (unsubscribe) { unsubscribe(); unsubscribe = null; }
     roomCode = '';
+    // buzz-bar 隨 screen-game 隱藏
     document.getElementById('overlay-win').classList.remove('show');
     document.getElementById('screen-game').classList.remove('active');
     document.getElementById('screen-join').classList.add('active');

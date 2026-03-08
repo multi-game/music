@@ -182,8 +182,26 @@
     .yf-apply-btn:active { transform: scale(.95); }
 
     /* 歌曲選擇器 */
-    .song-picker { position: relative; }
+    .song-picker-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .song-picker { position: relative; flex: 1; }
     .song-picker input { padding-right: 40px; }
+    .random-btn {
+      flex-shrink: 0;
+      width: 42px; height: 42px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.08);
+      font-size: 20px;
+      cursor: pointer;
+      transition: transform .15s, background .15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .random-btn:hover  { background: rgba(255,255,255,.16); }
+    .random-btn:active { transform: scale(.9); }
     .song-list-dropdown {
       position: absolute;
       top: calc(100% + 6px);
@@ -215,16 +233,28 @@
       display: none;
     }
     .now-playing.show { display: block; }
-    .now-playing .np-label  { font-size: 11px; color: var(--green); letter-spacing: 1px; margin-bottom: 4px; }
-    .now-playing .np-title  { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
-    .now-playing .np-artist { font-size: 12px; color: rgba(255,255,255,.6); margin-bottom: 12px; }
+
+    /* 頂部：NOW PLAYING 標籤 + 開關按鈕同排 */
+    .np-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      gap: 8px;
+    }
+    .np-top-row .np-label { font-size: 11px; color: var(--green); letter-spacing: 1px; }
+
+    /* 歌曲資訊區塊 */
+    .np-info { margin-bottom: 10px; }
+    .np-title  { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+    .np-artist { font-size: 13px; color: rgba(255,255,255,.65); margin-bottom: 2px; }
+    .np-year   { font-size: 12px; color: rgba(255,255,255,.4); }
 
     /* 播放控制 */
     .audio-controls {
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-top: 10px;
     }
     .audio-controls .play-btn {
       width: 38px; height: 38px;
@@ -268,6 +298,44 @@
     }
     .audio-time { font-size: 11px; color: rgba(255,255,255,.45); flex-shrink: 0; }
     .no-preview { font-size: 11px; color: rgba(248,113,113,.8); margin-top: 8px; }
+
+    /* 顯示控制開關（整合進 np-top-row，不佔獨立行） */
+    .visibility-toggles {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .vis-btn {
+      padding: 5px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,.2);
+      background: rgba(74,222,128,.15);
+      border-color: rgba(74,222,128,.4);
+      color: rgba(255,255,255,.8);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .vis-btn.active {
+      background: rgba(74,222,128,.25);
+      border-color: #4ade80;
+      color: #fff;
+    }
+    .vis-btn.hidden-mode {
+      background: rgba(248,113,113,.1);
+      border-color: rgba(248,113,113,.4);
+      color: rgba(255,255,255,.45);
+    }
+    /* 隱藏時用遮罩取代，讓主持人知道有值但看不清楚 */
+    .np-title.blurred,
+    .np-artist.blurred,
+    .np-year.blurred {
+      filter: blur(6px);
+      user-select: none;
+      transition: filter .3s;
+    }
+    /* np-year 已在上方 .np-info 區塊統一定義 */
 
     /* 玩家分數卡 */
     .players-grid {
@@ -432,15 +500,28 @@
         <button class="yf-apply-btn" onclick="applyCustomYear()">套用</button>
       </div>
 
-      <div class="song-picker">
-        <input type="text" id="song-search" placeholder="搜尋歌名或歌手…" autocomplete="off"
-               oninput="filterSongs(this.value)" onfocus="openDropdown()" />
-        <div class="song-list-dropdown" id="song-dropdown"></div>
+      <div class="song-picker-row">
+        <div class="song-picker">
+          <input type="text" id="song-search" placeholder="搜尋歌名或歌手…" autocomplete="off"
+                 oninput="filterSongs(this.value)" onfocus="openDropdown()" />
+          <div class="song-list-dropdown" id="song-dropdown"></div>
+        </div>
+        <button class="random-btn" onclick="pickRandom()" title="從目前篩選範圍隨機抽一首">🎲</button>
       </div>
       <div class="now-playing" id="now-playing">
-        <div class="np-label">▶ NOW PLAYING</div>
-        <div class="np-title"  id="np-title">—</div>
-        <div class="np-artist" id="np-artist">—</div>
+        <div class="np-top-row">
+          <div class="np-label">▶ NOW PLAYING</div>
+          <div class="visibility-toggles">
+            <button class="vis-btn hidden-mode" id="vis-title"  onclick="toggleVis('title')">歌名 🙈</button>
+            <button class="vis-btn hidden-mode" id="vis-artist" onclick="toggleVis('artist')">歌手 🙈</button>
+            <button class="vis-btn hidden-mode" id="vis-year"   onclick="toggleVis('year')">年份 🙈</button>
+          </div>
+        </div>
+        <div class="np-info">
+          <div class="np-title"  id="np-title">—</div>
+          <div class="np-artist" id="np-artist">—</div>
+          <div class="np-year"   id="np-year"></div>
+        </div>
         <div class="audio-controls">
           <button class="play-btn"   id="btn-play"  title="播放/暫停">▶</button>
           <button class="replay-btn" id="btn-replay" title="重聽">↩</button>
@@ -488,6 +569,26 @@
   let players     = [];
   let unsubscribe = null;
   let songsLoaded = false;
+
+  // ── 顯示控制 ──
+  const visState = { title: false, artist: false, year: false };
+
+  window.toggleVis = (field) => {
+    visState[field] = !visState[field];
+    const btn = document.getElementById(`vis-${field}`);
+    const el  = document.getElementById(`np-${field}`);
+    if (visState[field]) {
+      btn.classList.add('active');
+      btn.classList.remove('hidden-mode');
+      btn.textContent = { title: '歌名', artist: '歌手', year: '年份' }[field] + ' 👁';
+      el.classList.remove('blurred');
+    } else {
+      btn.classList.remove('active');
+      btn.classList.add('hidden-mode');
+      btn.textContent = { title: '歌名', artist: '歌手', year: '年份' }[field] + ' 🙈';
+      el.classList.add('blurred');
+    }
+  };
 
   // ── 音樂播放 ──
   const audio    = document.getElementById('host-audio');
@@ -611,6 +712,23 @@
       renderPlayers(data.players || {});
       renderNowPlaying(data.currentSong || {});
       if (data.winner) showWinner(data.winner, data.winScore);
+
+      // 有玩家按下答題 → 暫停音樂並提示
+      const wasBuzzed = audio._buzzShowing || false;
+      if (data.buzzed) {
+        if (!audio.paused) {
+          audio._wasPlaying = true;
+          audio.pause();
+        }
+        if (!wasBuzzed) {
+          showToast('🙋 有玩家按下答題！');
+        }
+        audio._buzzShowing = true;
+        showBuzzAlert(true);
+      } else {
+        audio._buzzShowing = false;
+        showBuzzAlert(false);
+      }
     }, err => {
       showToast('Firebase 錯誤：' + err.message);
       console.error(err);
@@ -667,6 +785,17 @@
   };
 
   // ── 選歌 ──
+  // ── 隨機選歌 ──
+  window.pickRandom = () => {
+    const pool = getYearFiltered();
+    if (!pool.length) return showToast('目前範圍內沒有歌曲');
+    const song = pool[Math.floor(Math.random() * pool.length)];
+    document.getElementById('song-search').value = '';
+    document.getElementById('song-dropdown').classList.remove('open');
+    selectSong(song, false);
+    showToast(`🎲 隨機抽到：${song.title}`);
+  };
+
   // ── 年份篩選狀態 ──
   let yearFrom = '';
   let yearTo   = '';
@@ -773,8 +902,9 @@
     }
   }
 
-  function selectSong(song) {
-    document.getElementById('song-search').value = `${song.title} — ${song.artist}`;
+  function selectSong(song, showInSearch = true) {
+    const searchEl = document.getElementById('song-search');
+    searchEl.value = showInSearch ? `${song.title} — ${song.artist}` : '';
     document.getElementById('song-dropdown').classList.remove('open');
 
     // 更新 Firebase（廣播給 scores.html）
@@ -789,7 +919,13 @@
     // 播放試聽
     document.getElementById('now-playing').classList.add('show');
     document.getElementById('np-title').textContent  = song.title;
-    document.getElementById('np-artist').textContent = `${song.artist} · ${song.year}`;
+    document.getElementById('np-artist').textContent = song.artist;
+    document.getElementById('np-year').textContent   = song.year ? `📅 ${song.year}` : '';
+
+    // 套用目前顯示狀態
+    ['title', 'artist', 'year'].forEach(f => {
+      document.getElementById(`np-${f}`).classList.toggle('blurred', !visState[f]);
+    });
     progBar.value      = 0;
     timeEl.textContent = '0:00';
     btnPlay.textContent = '▶';
@@ -810,6 +946,21 @@
     if (!e.target.closest('.song-picker'))
       document.getElementById('song-dropdown').classList.remove('open');
   });
+
+  // ── 答題提示 ──
+  function showBuzzAlert(show) {
+    const el = document.getElementById('buzz-alert');
+    el.style.display = show ? 'flex' : 'none';
+  }
+
+  window.clearBuzz = async () => {
+    await update(ref(db, `rooms/${roomCode}`), { buzzed: false });
+    // 若答題前正在播放，自動恢復
+    if (audio._wasPlaying && audio.src) {
+      audio._wasPlaying = false;
+      audio.play().catch(() => {});
+    }
+  };
 
   // ── 勝利 ──
   function showWinner(name, ws) {
@@ -850,5 +1001,29 @@
     setTimeout(() => t.classList.remove('show'), 2800);
   }
 </script>
+<!-- 答題固定橫幅（fixed，永遠顯示在頁面頂部）-->
+<div id="buzz-alert" style="
+  display:none;
+  position:fixed; top:0; left:0; right:0; z-index:9999;
+  background:linear-gradient(135deg,#667eea,#764ba2);
+  color:#fff; padding:14px 20px;
+  flex-direction:row; align-items:center; justify-content:space-between;
+  gap:12px; box-shadow:0 4px 20px rgba(102,126,234,.6);
+  font-size:16px; font-weight:700;
+  animation: buzzPulse .5s ease-in-out infinite alternate;
+">
+  <span>🙋 有玩家按下答題！音樂已暫停</span>
+  <button onclick="clearBuzz()" style="
+    padding:8px 20px; border-radius:8px; border:none;
+    background:#fff; color:#667eea;
+    font-size:14px; font-weight:800; cursor:pointer; flex-shrink:0;
+  ">▶ 繼續</button>
+</div>
+<style>
+@keyframes buzzPulse {
+  from { box-shadow: 0 4px 20px rgba(102,126,234,.6); }
+  to   { box-shadow: 0 4px 32px rgba(102,126,234,1); }
+}
+</style>
 </body>
 </html>
